@@ -11,7 +11,7 @@ resource "aws_vpc" "ecs-vpc" {
  tags = {
    Name = var.vpc_prefix 
  }
-}
+
 
 resource "aws_subnet" "subnet-pub1" {
  vpc_id                  = aws_vpc.ecs-vpc.id
@@ -22,7 +22,7 @@ resource "aws_subnet" "subnet-pub1" {
    Name = "${var.vpc_prefix}-public-2a"
  }
 
-}
+
 
 resource "aws_subnet" "subnet-pub2" {
  vpc_id                  = aws_vpc.ecs-vpc.id
@@ -32,7 +32,7 @@ resource "aws_subnet" "subnet-pub2" {
  tags = {
    Name = "${var.vpc_prefix}-public-1a"
  }
-}
+
 
 resource "aws_subnet" "subnet-priv1" {
  vpc_id                  = aws_vpc.ecs-vpc.id
@@ -43,7 +43,7 @@ resource "aws_subnet" "subnet-priv1" {
    Name = "${var.vpc_prefix}-private-2a"
  }
 
-}
+
 
 resource "aws_subnet" "subnet-priv2" { 
   vpc_id                  = aws_vpc.ecs-vpc.id
@@ -53,14 +53,14 @@ resource "aws_subnet" "subnet-priv2" {
  tags = {
    Name = "${var.vpc_prefix}-private-1a"
  }
-}
+
 
 resource "aws_internet_gateway" "internet_gateway" {
  vpc_id = aws_vpc.main.id
  tags = {
    Name = "internet_gateway"
  }
-}
+
 
 resource "aws_eip" "nat_gateway" {
   vpc = true
@@ -85,11 +85,13 @@ resource "aws_route_table" "route_table" {
    gateway_id = aws_internet_gateway.internet_gateway.id
 }
 }
+
 resource "aws_route_table" "private_route_table" {
  vpc_id = aws_vpc.main.id
  route {
    cidr_block = "0.0.0.0/0"
    gateway_id = aws_internet_gateway.internet_gateway.id
+}
 }
 
 resource "aws_route_table_association" "subnet_route" {
