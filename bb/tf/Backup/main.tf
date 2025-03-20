@@ -1,72 +1,3 @@
-ami                         = "ami-0e252be8f4dfa2c0d"
-cluster_name		        = TFCluster
-container_image             = "eva96002/itm350-artemiseva-bb@sha256:e1ac7ff41e48370cdf65cf0e8efa918d413fead06972dfb9d4ee040ecaea3b82"
-container_port              = 8080
-instance_name_prefix	    = "cit262-node"
-instance_type               = "t2.micro"
-lab_role                    = "arn:aws:iam::{TODO your account number here}:role/LabRole"
-region                      = "us-west-2"
-vpc_cidr		            = "10.0.0.0/16"
-vpc_prefix		            = "ecs-vpc"
-
-variable "ami" {
-  type = string
-}
-
-variable "cluster_name" {
-  type = string
-}
-
-variable "container_image" {
-  type = string
-}
-
-variable "container_port" {
-  type = number
-}
-
-variable "instance_name_prefix" {
-  type = string
-}
-
-variable "instance_type" {
-  type = string
-}
-
-variable "lab_role" {
-  type = string
-}
-
-variable "region" {
-  type = string
-}
-
-variable "vpc_cidr" {
-  type = string
-}
-
-variable "vpc_prefix" {
-  type = string
-}
-
-terraform {
-  required_providers {
-	aws = {
-  	source  = "hashicorp/aws"
-  	version = "~> 4.16"
-	}
-  }
-
-  required_version = ">= 1.6.6"
-}
-
-provider "aws" {
-  region  = "us-west-2"
-}
-
-
-
-
 data "template_file" "user_data" {
   template = <<-EOT
    #! /bin/bash
@@ -386,9 +317,4 @@ resource "aws_ecs_service" "ecs_service" {
  }
 
  depends_on = [aws_autoscaling_group.ecs_asg]
-}
-
-output "load_balancer_url" {
-  description = "The DNS name of the load balancer"
-  value       = format("Open this URL to see your app http://%s/",try(aws_lb.ecs_alb.dns_name, null))
 }
