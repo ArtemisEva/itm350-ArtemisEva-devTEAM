@@ -11,7 +11,7 @@ resource "aws_vpc" "ecs-vpc" {
  tags = {
    Name = var.vpc_prefix 
  }
-
+}
 
 resource "aws_subnet" "subnet-pub1" {
  vpc_id                  = aws_vpc.ecs-vpc.id
@@ -21,7 +21,7 @@ resource "aws_subnet" "subnet-pub1" {
  tags = {
    Name = "${var.vpc_prefix}-public-2a"
  }
-
+}
 
 
 resource "aws_subnet" "subnet-pub2" {
@@ -32,7 +32,7 @@ resource "aws_subnet" "subnet-pub2" {
  tags = {
    Name = "${var.vpc_prefix}-public-1a"
  }
-
+}
 
 resource "aws_subnet" "subnet-priv1" {
  vpc_id                  = aws_vpc.ecs-vpc.id
@@ -42,7 +42,7 @@ resource "aws_subnet" "subnet-priv1" {
  tags = {
    Name = "${var.vpc_prefix}-private-2a"
  }
-
+}
 
 
 resource "aws_subnet" "subnet-priv2" { 
@@ -53,14 +53,14 @@ resource "aws_subnet" "subnet-priv2" {
  tags = {
    Name = "${var.vpc_prefix}-private-1a"
  }
-
+}
 
 resource "aws_internet_gateway" "internet_gateway" {
  vpc_id = aws_vpc.main.id
  tags = {
    Name = "internet_gateway"
  }
-
+}
 
 resource "aws_eip" "nat_gateway" {
   vpc = true
