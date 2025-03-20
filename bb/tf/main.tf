@@ -248,7 +248,8 @@ name = "test1"
      status                    = "ENABLED"
      target_capacity           = 3
 }
-
+ }
+}
 resource "aws_ecs_cluster_capacity_providers" "cluster-cp" {
  cluster_name = aws_ecs_cluster.ecs_cluster.name
 
