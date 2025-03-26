@@ -1,76 +1,46 @@
-data "template_file" "user_data" {
-  template = <<-EOT
-   #! /bin/bash
-   echo "ECS_CLUSTER=${var.cluster_name}" >> /etc/ecs/ecs.config
- EOT
+locals {
+ user_data = <<EOF
+   #!/bin/bash
+   echo ECS_CLUSTER=${var.cluster_name} >> /etc/ecs/ecs.config
+ EOF
 }
 
-resource "aws_vpc" "ecs-vpc" {
+data "aws_availability_zones" "available" {}
+
+resource "aws_vpc" "ecs_vpc" {
  cidr_block           = var.vpc_cidr
- enable_dns_hostnames = true
- tags = {
-   Name = var.vpc_prefix 
- }
+ tags = { Name = "${var.vpc_prefix}-tf"} 
 }
 
-resource "aws_subnet" "subnet-pub1" {
- vpc_id                  = aws_vpc.ecs-vpc.id
- cidr_block              = cidrsubnet(aws_vpc.ecs-vpc.cidr_block, 8, 1)
+resource "aws_subnet" "public" {
+count = 2
+ vpc_id                  = aws_vpc.ecs_vpc.id
+ cidr_block              = cidrsubnet(aws_vpc.ecs_vpc.cidr_block, 2, count.index)
  map_public_ip_on_launch = true
- availability_zone       = "${var.region}a"
- tags = {
-   Name = "${var.vpc_prefix}-public-2a"
- }
+ availability_zone       = element{data.aws_availability_zones.available.names, count.index}
+ tags = { Name = "public-subnet-${count.index}" }
 }
 
-
-resource "aws_subnet" "subnet-pub2" {
- vpc_id                  = aws_vpc.ecs-vpc.id
- cidr_block              = cidrsubnet(aws_vpc.ecs-vpc.cidr_block, 8, 1)
- map_public_ip_on_launch = true
- availability_zone       = "${var.region}a"
- tags = {
-   Name = "${var.vpc_prefix}-public-1a"
- }
-}
-
-resource "aws_subnet" "subnet-priv1" {
- vpc_id                  = aws_vpc.ecs-vpc.id
- cidr_block              = cidrsubnet(aws_vpc.ecs-vpc.cidr_block, 8, 3)
- map_public_ip_on_launch = false
- availability_zone       = "${var.region}a"
- tags = {
-   Name = "${var.vpc_prefix}-private-2a"
- }
-}
-
-
-resource "aws_subnet" "subnet-priv2" { 
-  vpc_id                  = aws_vpc.ecs-vpc.id
- cidr_block              = cidrsubnet(aws_vpc.ecs-vpc.cidr_block, 8, 3)
- map_public_ip_on_launch = false
- availability_zone       = "${var.region}a"
- tags = {
-   Name = "${var.vpc_prefix}-private-1a"
- }
+resource "aws_subnet" "private" {
+count = 2
+ vpc_id                  = aws_vpc.ecs_vpc.id
+ cidr_block              = cidrsubnet(aws_vpc.ecs_vpc.cidr_block, 2, count.index)
+ availability_zone       = element{data.aws_availability_zones.available.names, count.index}
+ tags = { Name = "private-subnet-${count.index}" }
 }
 
 resource "aws_internet_gateway" "internet_gateway" {
- vpc_id = aws_vpc.main.id
- tags = {
-   Name = "internet_gateway"
- }
+ vpc_id = aws_vpc.ecs_vpc.id
+ tags = { Name = "${var.vpc_prefix}-igw-tf"}
 }
 
-resource "aws_eip" "nat_gateway" {
-  vpc = true
-}
+resource "aws_eip" "nat_gateway" {}
 
 resource "aws_nat_gateway" "nat_gw" {
    allocation_id = aws_eip.nat_gateway.id
-  subnet_id     = "subnet-priv1"
+  subnet_id     = aws_subnet.private[0].id
   tags = {
-    Name = "NAT_gw"
+    Name = "NAT_gw-tf"
   }
 
   # To ensure proper ordering, it is recommended to add an explicit dependency
@@ -79,7 +49,7 @@ resource "aws_nat_gateway" "nat_gw" {
 }
 
 resource "aws_route_table" "route_table" {
- vpc_id = aws_vpc.main.id
+ vpc_id = aws_vpc.ecs_vpc.id
  route {
    cidr_block = "0.0.0.0/0"
    gateway_id = aws_internet_gateway.internet_gateway.id
@@ -87,55 +57,64 @@ resource "aws_route_table" "route_table" {
 }
 
 resource "aws_route_table" "private_route_table" {
- vpc_id = aws_vpc.main.id
+ vpc_id = aws_vpc.ecs_vpc.id
  route {
    cidr_block = "0.0.0.0/0"
-   gateway_id = aws_internet_gateway.internet_gateway.id
-}
+   gateway_id = aws_nat_gateway.nat_gw.id
+  }
+  tags = {Name = "private-rt-tf"}
 }
 
 resource "aws_route_table_association" "subnet_route" {
- subnet_id      = aws_subnet.subnet-pub1.id
+ subnet_id      = aws_subnet.public[0].id
  route_table_id = aws_route_table.route_table.id
 }
 
 resource "aws_route_table_association" "subnet2_route" {
- subnet_id      = aws_subnet.subnet-pub2.id
+ subnet_id      = aws_subnet.public[1].id
  route_table_id = aws_route_table.route_table.id
 }
 
 resource "aws_route_table_association" "priv_subnet1_route" {
- subnet_id      = aws_subnet.subnet.id
- route_table_id = aws_route_table.route_table.id
+ subnet_id      = aws_subnet.private[0].id
+ route_table_id = aws_route_table.private_route_table.id
 }
 
 resource "aws_route_table_association" "priv_subnet2_route" {
- subnet_id      = aws_subnet.subnet2.id
- route_table_id = aws_route_table.route_table.id
+ subnet_id      = aws_subnet.private[1].id
+ route_table_id = aws_route_table.private_route_table.id
 }
 
-resource "aws_security_group" "alb-http-sg" {
- name   = "ecs-security-group"
- vpc_id = aws_vpc.main.id
- tags = {
-   Name = "alb-http-sg"
- }
-
-}
-
-resource "aws_security_group" "ecs-cluster-sg" {
- name = "my-ecs-cluster"
+resource "aws_security_group" "app_sg" {
+  vpc_id = aws_vpc.ecs_vpc.id
   ingress {
-	    from_port   = 32153 
+    from_port = 80
+    to_port = 80
+    protocol =  "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+        from_port = 443
+    to_port = 443
+    protocol =  "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = { Name = "app-sg-tf"}
+  }
+
+resource "aws_security_group" "ecs_cluster_sg" {
+  vpc_id = aws_vpc.ecs_vpc.id
+  ingress{
+ 	    from_port   = 32153 
 	    to_port     = 65535
 	    protocol    = "tcp"
-	    security_groups = ["${aws_security_group.alb-http-sg.id}"]
+	    security_groups = ["${aws_security_group.app_sg.id}"]
 	}
   ingress {
             from_port   = 22
             to_port     = 22
             protocol    = "tcp"
-            security_groups = ["${aws_security_group.alb-http-sg.id}"]
+            security_groups = ["${aws_security_group.app_sg.id}"]
         }
 
   egress {
@@ -149,17 +128,12 @@ resource "aws_security_group" "ecs-cluster-sg" {
  }
 }
 
-resource "aws_key_pair" "ecs-node-kp" {
-  key_name   = "ecs-node-key"
- public_key = file("~/.ssh/id_rsa.pub")
-}
-
 resource "aws_launch_template" "ecs_lt" {
  name_prefix   = "ecs-template"
  image_id      = var.ami
  instance_type = var.instance_type
  key_name               = aws_key_pair.ecs-node-kp.key_name
- vpc_security_group_ids = [aws_security_group.ecs-cluster-sg.id]
+ vpc_security_group_ids = [aws_security_group.ecs_cluster_sg.id]
  iam_instance_profile {
    name = "LabInstanceProfile"
  }
@@ -176,37 +150,27 @@ resource "aws_launch_template" "ecs_lt" {
      Name = "${var.instance_name_prefix}"
    }
  }
- user_data = "${base64encode(data.template_file.user_data.rendered)}"
+ user_data = base64encode(local.user_data)"
 }
 
 resource "aws_autoscaling_group" "ecs_asg" {
- vpc_zone_identifier = [aws_subnet.subnet-priv1.id, aws_subnet.subnet-priv2.id]
- desired_capacity    = 2
- max_size            = 3
+ vpc_zone_identifier = aws_subnet.private[*].id
+ desired_capacity    = 1
+ max_size            = 1
  min_size            = 1
-
+ protect_from_scale_in = true
  launch_template {
    id      = aws_launch_template.ecs_lt.id
    version = "$Latest"
  }
-
- tag {
-   key                 = "AmazonECSManaged"
-   value               = true
-   propagate_at_launch = true
- }
 }
 
 resource "aws_lb" "ecs_alb" {
-name               = "ecs-alb"
+name               = "app-lb-tf"
  internal           = false
  load_balancer_type = "application"
- security_groups    = [aws_security_group.security_group.id]
- subnets            = [aws_subnet.subnet.id, aws_subnet.subnet2.id]
-
- tags = {
-   Name = "ecs-alb"
- }
+ security_groups    = [aws_security_group.app_sg.id]
+ subnets            = aws_subnet.private[*].id
 }
 
 resource "aws_lb_listener" "ecs_alb_listener" {
@@ -225,7 +189,7 @@ resource "aws_lb_target_group" "ecs_tg" {
  port        = 80
  protocol    = "HTTP"
  target_type = "instance"
- vpc_id      = aws_vpc.ecs-vpc.id
+ vpc_id      = aws_vpc.ecs_vpc.id
 
  health_check {
    path = "/"
@@ -237,24 +201,15 @@ resource "aws_ecs_cluster" "ecs_cluster" {
 }
 
 resource "aws_ecs_capacity_provider" "ecs_capacity_provider" {
-name = "test1"
-
- auto_scaling_group_provider {
-   auto_scaling_group_arn = aws_autoscaling_group.ecs_asg.arn
-
-   managed_scaling {
-     maximum_scaling_step_size = 1000
-     minimum_scaling_step_size = 1
-     status                    = "ENABLED"
-     target_capacity           = 3
+  name = "bb-cp"
+  auto_scaling_group_provider {
+    auto_scaling_group_arn = aws_autoscaling_group.ecs_asg.arn
+  }
 }
- }
-}
+
 resource "aws_ecs_cluster_capacity_providers" "cluster-cp" {
- cluster_name = aws_ecs_cluster.ecs_cluster.name
-
- capacity_providers = [aws_ecs_capacity_provider.ecs_capacity_provider.name]
-
+cluster_name = aws_ecs_cluster.ecs_cluster.name
+capacity_providers = [aws_ecs_capacity_provider.ecs_capacity_provider.name]
  default_capacity_provider_strategy {
    base              = 1
    weight            = 100
@@ -295,11 +250,8 @@ resource "aws_ecs_service" "ecs_service" {
  name            = "bb-ecs-srv"
  cluster         = aws_ecs_cluster.ecs_cluster.id
  task_definition = aws_ecs_task_definition.bb_task_definition.arn
- desired_count   = 2
+ desired_count   = 1
  force_new_deployment = true
- placement_constraints {
-   type = "distinctInstance"
- }
 
  triggers = {
    redeployment = timestamp()
