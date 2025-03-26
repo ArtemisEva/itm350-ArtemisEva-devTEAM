@@ -1,5 +1,5 @@
 ami                         = "ami-0e252be8f4dfa2c0d"
-cluster_name		        = TFCluster
+cluster_name		        = "TFCluster"
 container_image             = "eva96002/itm350-artemiseva-bb@sha256:e1ac7ff41e48370cdf65cf0e8efa918d413fead06972dfb9d4ee040ecaea3b82"
 container_port              = 8080
 instance_name_prefix	    = "cit262-node"
