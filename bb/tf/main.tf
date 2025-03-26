@@ -132,7 +132,6 @@ resource "aws_launch_template" "ecs_lt" {
  name_prefix   = "ecs-template"
  image_id      = var.ami
  instance_type = var.instance_type
- key_name              = pub_aws_key_pair
  vpc_security_group_ids = [aws_security_group.ecs_cluster_sg.id]
  iam_instance_profile {
    name = "LabInstanceProfile"
