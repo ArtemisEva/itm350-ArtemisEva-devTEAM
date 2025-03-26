@@ -150,7 +150,7 @@ resource "aws_launch_template" "ecs_lt" {
      Name = "${var.instance_name_prefix}"
    }
  }
- user_data = base64encode(local.user_data)"
+ user_data = base64encode(local.user_data)
 }
 
 resource "aws_autoscaling_group" "ecs_asg" {
